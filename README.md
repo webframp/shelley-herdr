@@ -148,6 +148,31 @@ Shelley never pauses for tool approval, so the bridge never reports `blocked`.
 - Resume after a herdr restart works only if herdr can run the saved command.
   herdr rejects paths and apostrophes in it, which is why it goes through `sh`.
 
+## Testing
+
+```sh
+test/run.sh           # both install methods
+test/run.sh github    # herdr plugin install, no Nix
+test/run.sh nix       # Home Manager module
+```
+
+Needs `podman` or `docker` and network access; the first run downloads images
+and, for `nix`, builds Home Manager (cached in a volume afterwards;
+`test/run.sh clean` removes it). A run takes about a minute once cached.
+
+Each method runs in its own container against a snapshot of your working tree,
+so uncommitted changes are what gets tested. The same suite (`test/suite.sh`)
+runs for both, so a difference between methods fails in exactly one of them. It
+covers registration, binary resolution, the picker, state transitions
+(`working`, `unknown` after a dropped connection, `idle`), the pane title, the
+saved resume command, resuming through the picker, a herdr server restart
+relaunching the bridge, and re-running setup. `ssh` and `shelley` are replaced by
+fakes in `test/fakes`, so no VM is ever contacted.
+
+What the tests do not cover: the real Shelley (the fake reproduces the
+`shelley client` output format as observed, not as specified), keybindings
+(they need an attached terminal client), and platforms other than Linux x86_64.
+
 ## Development
 
 ```sh
