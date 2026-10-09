@@ -23,21 +23,30 @@ Go standard library.
 - VMs with Shelley installed (the default `exeuntu` image has it) and a
   Shelley recent enough to include `shelley client`.
 
-## Install with Nix
+## Install
 
-Add the flake as an input, the same way you would any other:
+Both methods end in the same place: herdr has the `webframp.shelly` plugin
+registered, and `shelly-herdr` is available to run. Choose by how you manage
+your machine.
+
+| | Home Manager | Everything else |
+| --- | --- | --- |
+| You run | add a flake input, then switch | `herdr plugin install webframp/shelly-herdr` |
+| Needs | Nix with flakes, Home Manager | `git` and Go 1.22+ |
+| Who registers the plugin | the module, on every switch | `herdr plugin install` |
+| Who provides the binary | the Nix package, on your `PATH` | the install's build step |
+| To update | update the flake input and switch | run the install command again |
+
+### Home Manager
+
+Add the flake as an input and enable the module:
 
 ```nix
 {
   inputs.shelly-herdr.url = "github:webframp/shelly-herdr";
-  # inputs.shelly-herdr.inputs.nixpkgs.follows = "nixpkgs";
+  inputs.shelly-herdr.inputs.nixpkgs.follows = "nixpkgs";
 }
 ```
-
-### Home Manager (recommended)
-
-The module installs the package and registers the herdr plugin on every
-switch, so the registration never goes stale after an upgrade:
 
 ```nix
 {
@@ -46,68 +55,33 @@ switch, so the registration never goes stale after an upgrade:
 }
 ```
 
-After a switch, `herdr plugin list` shows `webframp.shelly`. If `herdr` isn't
-installed yet, the switch prints the one command to run later instead of
-failing. The module doesn't manage a keybinding; see [Keybinding](#keybinding).
+After a switch, the module has installed the package and linked the plugin. If
+`herdr` isn't installed yet, the switch prints the one command to run later
+instead of failing. The module doesn't manage a keybinding; add one under
+[Keybinding](#keybinding).
 
-### Package only
-
-Without Home Manager, add the package yourself:
-
-```nix
-home.packages = [inputs.shelly-herdr.packages.${pkgs.stdenv.hostPlatform.system}.default];
-```
-
-An overlay is also available (`overlays.default`, providing `pkgs.shelly-herdr`).
-Then register the plugin once. The package installs it under
-`share/herdr/plugins/shelly`:
-
-```sh
-herdr plugin link "$(dirname "$(dirname "$(readlink -f "$(command -v shelly-herdr)")")")/share/herdr/plugins/shelly"
-```
-
-The link points into the Nix store, so run it again after you upgrade the
-package.
-
-To try the bridge without installing:
-
-```sh
-nix run github:webframp/shelly-herdr -- <vm>
-```
-
-## Install without Nix
-
-You need `git` and Go 1.22 or newer. One command clones the repository, builds
-the binary into the plugin directory, and registers the plugin:
+### Everything else
 
 ```sh
 herdr plugin install webframp/shelly-herdr
 ```
 
 herdr shows a preview, including the build command (`go build`), and asks for
-confirmation. Pass `--yes` to skip the prompt. To update, run the same command
-again; herdr replaces its managed checkout.
+confirmation; pass `--yes` to skip the prompt. It clones the repository, builds
+the binary into the plugin directory, and registers the plugin. To update, run
+the same command again.
 
-The plugin picker finds `shelly-herdr` on `PATH` first, then falls back to the
-binary the install built, so the picker works with no further setup. To also run
-the bridge directly from any pane (see [Use](#use)), put it on your `PATH`:
-
-```sh
-go install github.com/webframp/shelly-herdr@latest   # installs to $(go env GOBIN), default ~/go/bin
-```
-
-### Developing locally
+### Check it worked
 
 ```sh
-git clone https://github.com/webframp/shelly-herdr
-cd shelly-herdr
-go build -o shelly-herdr .
-herdr plugin link "$PWD"
+herdr plugin list     # shows webframp.shelly
 ```
 
-`plugin link` never runs build commands, so build first. herdr refuses to
-install over a linked plugin, so run `herdr plugin unlink webframp.shelly`
-before you try the GitHub install.
+Then continue with [Keybinding](#keybinding) and [Use](#use). Nothing after
+this point depends on which method you chose.
+
+Other ways to install (a plain Nix package, running without installing, local
+development) are under [Development](#development).
 
 ## Use
 
@@ -180,6 +154,51 @@ Shelley never pauses for tool approval, so the bridge never reports `blocked`.
 nix develop     # Go toolchain, or use your own
 go vet ./... && go build ./...
 nix build       # the package, including the plugin directory
+```
+
+### Run from a checkout
+
+```sh
+git clone https://github.com/webframp/shelly-herdr
+cd shelly-herdr
+go build -o shelly-herdr .
+herdr plugin link "$PWD"
+```
+
+`plugin link` never runs build commands, so build first. herdr refuses to
+install over a linked plugin, so run `herdr plugin unlink webframp.shelly`
+before you try the GitHub install.
+
+### Nix without Home Manager
+
+Add the package yourself, then register the plugin once. The package installs it
+under `share/herdr/plugins/shelly`:
+
+```nix
+home.packages = [inputs.shelly-herdr.packages.${pkgs.stdenv.hostPlatform.system}.default];
+```
+
+```sh
+herdr plugin link "$(dirname "$(dirname "$(readlink -f "$(command -v shelly-herdr)")")")/share/herdr/plugins/shelly"
+```
+
+The link points into the Nix store, so run it again after you upgrade the
+package. An overlay is also available (`overlays.default`, providing
+`pkgs.shelly-herdr`).
+
+### Try without installing
+
+```sh
+nix run github:webframp/shelly-herdr -- <vm>
+```
+
+### Put the binary on your PATH after a GitHub install
+
+The plugin picker works without this. To also run `shelly-herdr` directly from
+any pane (see [Use](#use)):
+
+```sh
+go install github.com/webframp/shelly-herdr@latest   # installs to $(go env GOBIN), default ~/go/bin
 ```
 
 ## License
