@@ -1,0 +1,17 @@
+id = "webframp.shelly"
+name = "Shelly"
+version = "0.1.0"
+min_herdr_version = "0.9.0"
+platforms = ["linux", "macos"]
+
+[[actions]]
+id = "open"
+title = "Shelley: open on an exe.dev VM"
+contexts = ["workspace"]
+command = ["herdr", "plugin", "pane", "open", "--plugin", "webframp.shelly", "--entrypoint", "picker", "--placement", "split", "--direction", "right", "--focus"]
+
+[[panes]]
+id = "picker"
+title = "Shelley"
+placement = "split"
+command = ["./shelly-herdr", "pick"]
