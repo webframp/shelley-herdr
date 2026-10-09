@@ -16,7 +16,7 @@
     packages = forEachSystem (pkgs: {
       default = pkgs.buildGoModule {
         pname = "shelly-herdr";
-        version = "0.1.0";
+        version = "0.0.1";
         src = self;
         vendorHash = null; # stdlib only
 
