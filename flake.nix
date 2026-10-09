@@ -21,12 +21,9 @@
         vendorHash = null; # stdlib only
 
         postInstall = ''
-          # herdr plugin: manifest plus a relative link to the binary, since the
-          # manifest launches ./shelly-herdr from the plugin root.
-          plugin=$out/share/herdr/plugins/shelly
-          mkdir -p $plugin
-          cp herdr-plugin.toml $plugin/
-          ln -s ../../../../bin/shelly-herdr $plugin/shelly-herdr
+          # herdr plugin manifest; its pane runs `shelly-herdr` from PATH.
+          mkdir -p $out/share/herdr/plugins/shelly
+          cp herdr-plugin.toml $out/share/herdr/plugins/shelly/
         '';
 
         meta = {

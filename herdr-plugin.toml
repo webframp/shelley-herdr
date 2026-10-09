@@ -14,4 +14,4 @@ command = ["herdr", "plugin", "pane", "open", "--plugin", "webframp.shelly", "--
 id = "picker"
 title = "Shelley"
 placement = "split"
-command = ["./shelly-herdr", "pick"]
+command = ["shelly-herdr", "pick"]

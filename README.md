@@ -70,8 +70,9 @@ install -m755 shelly-herdr ~/.local/bin/    # any directory on your PATH
 herdr plugin link "$PWD"
 ```
 
-`herdr plugin link` needs the plugin directory to contain the built
-`shelly-herdr` binary, which `go build` above puts there.
+The plugin runs `shelly-herdr` from `PATH`. herdr's server uses the `PATH` it
+started with, so make sure the install directory is on it, then restart the
+server (`herdr server stop`) if you changed your shell configuration.
 
 ## Use
 
