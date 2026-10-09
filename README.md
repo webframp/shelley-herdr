@@ -103,16 +103,15 @@ state reporting.
 
 ## Keybinding
 
-Plugin manifests can't declare keybindings. Bind the action in herdr's
-`config.toml` with a custom command (this example uses `prefix+a`; pick any key
-you haven't bound):
+Plugin manifests don't declare keys. Bind the action in herdr's `config.toml`
+(this example uses `prefix+a`; pick any key you haven't bound):
 
 ```toml
 [[keys.command]]
 key = "prefix+a"
-type = "shell"
+type = "plugin_action"
+command = "webframp.shelly.open"
 description = "Shelley on an exe.dev VM"
-command = "\"$HERDR_BIN_PATH\" plugin action invoke open --plugin webframp.shelly"
 ```
 
 Run `herdr config check` afterwards, then reload with your reload-config key or
