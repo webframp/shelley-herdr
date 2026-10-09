@@ -63,7 +63,8 @@ code, because herdr fails silently or rejects with terse errors.
 - **Plugin registry is global and shared:** `~/.config/herdr/plugins.json`.
   Overriding `HOME`, `XDG_CONFIG_HOME`, `HERDR_CONFIG_PATH` or `HERDR_SOCKET_PATH`
   does not isolate it. Never run `herdr plugin link/install/uninstall` against the
-  real machine while experimenting; use the containers.
+  developer's own herdr while experimenting: it rewrites their live plugin
+  registry. Use the containers.
 
 ## Install paths
 
@@ -112,18 +113,8 @@ pinned, so upstream changes can break the nix run on their own.
 ## Conventions
 
 - Match the existing comment density: short comments that explain why, not what.
-- Commits end with the `Co-Authored-By` line from the session's attribution
-  guidance. Do not push, tag, or add the `herdr-plugin` GitHub topic unless asked.
-  The repo is public.
-- Before publishing a change that touches install or resume behavior, run
-  `make test`.
+- Run `make test` before changing install or resume behavior, and again after.
 - Write README and doc prose in plain active voice, without filler or hedging.
-
-## Status
-
-As of the last update to this file: published at github.com/webframp/shelly-herdr,
-with several later commits not yet pushed. Verified on one real machine: picker,
-state transitions, title, resume, and the `prefix+a` binding through Home
-Manager. Still open: restart-resume on a real machine, then the release tag and
-the `herdr-plugin` marketplace topic. Check `git log origin/main..` and ask the
-user before assuming any of this is still true.
+- The repo is public. A version tag and the `herdr-plugin` GitHub topic (which
+  lists the plugin in herdr's marketplace) are release decisions for the
+  maintainer; a routine change should not add either.
