@@ -4,6 +4,10 @@ version = "0.1.0"
 min_herdr_version = "0.9.0"
 platforms = ["linux", "macos"]
 
+# Runs on `herdr plugin install` only; `plugin link` never builds.
+[[build]]
+command = ["go", "build", "-o", "shelly-herdr", "."]
+
 [[actions]]
 id = "open"
 title = "Shelley: open on an exe.dev VM"
@@ -14,4 +18,6 @@ command = ["herdr", "plugin", "pane", "open", "--plugin", "webframp.shelly", "--
 id = "picker"
 title = "Shelley"
 placement = "split"
-command = ["shelly-herdr", "pick"]
+# Prefer shelly-herdr on PATH (Nix and other package installs); fall back to the
+# binary built into the plugin directory by the install step.
+command = ["sh", "-c", '''command -v shelly-herdr >/dev/null 2>&1 && exec shelly-herdr pick || exec ./shelly-herdr pick''']
