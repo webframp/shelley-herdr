@@ -204,16 +204,16 @@ func read(args []string) {
 	if len(pos) != 1 {
 		fail("usage: read [-wait] ID")
 	}
+	// Like the real client, -wait ends at the first end-of-turn message in the
+	// history, which is not necessarily the live turn.
 	wait := o["wait"] == "true"
-	if wait {
-		// Simulate an SSH drop: consume one unit from the fail_reads counter.
-		p := filepath.Join(stateDir(), "fail_reads")
-		if b, err := os.ReadFile(p); err == nil {
-			if n, _ := strconv.Atoi(strings.TrimSpace(string(b))); n > 0 {
-				_ = os.WriteFile(p, []byte(strconv.Itoa(n-1)), 0o644)
-				fmt.Fprintln(os.Stderr, "fake shelley: connection dropped")
-				os.Exit(255)
-			}
+	// Simulate an SSH drop: consume one unit from the fail_reads counter.
+	p := filepath.Join(stateDir(), "fail_reads")
+	if b, err := os.ReadFile(p); err == nil {
+		if n, _ := strconv.Atoi(strings.TrimSpace(string(b))); n > 0 {
+			_ = os.WriteFile(p, []byte(strconv.Itoa(n-1)), 0o644)
+			fmt.Fprintln(os.Stderr, "fake shelley: connection dropped")
+			os.Exit(255)
 		}
 	}
 	printed := 0
@@ -234,6 +234,9 @@ func read(args []string) {
 			b, _ := json.Marshal(out)
 			fmt.Println(string(b))
 			printed++
+			if wait && m.End {
+				return
+			}
 		}
 		if !wait || (printed == len(c.Msgs) && !c.working()) {
 			return

@@ -21,8 +21,16 @@ Go, standard library only. Do not add dependencies.
 
 ## How it works
 
-- Transport: `ssh <vm>.exe.xyz shelley client {chat,read,list}`. `read -wait`
-  replays history, then streams. The bridge dedupes by `sequence_id`.
+- Transport: `ssh <vm>.exe.xyz shelley client {chat,read,list}`. A turn polls
+  `read <id>` (plus `list` for the working flag) once a second and prints messages
+  newer than the last `sequence_id`. Do not use `read -wait`: it streams only
+  until the first `end_of_turn` message in the history, so on a conversation that
+  has already finished a turn it returns before the new reply. A turn ends at an
+  `end_of_turn` message after the bridge's own prompt, since other clients can
+  add turns to the same conversation.
+- Input uses `readline.go`: raw mode through `stty`, cursor keys, Ctrl-A/E/B/F/K/U/W,
+  Alt-b/f, history, and Tab completion in the picker. `restoreTTY` runs from the
+  signal handler so a killed bridge never leaves the terminal without echo.
 - The client's default endpoint is a unix socket, but a VM can run Shelley
   socket-activated by systemd on `127.0.0.1:9999` with a required
   `X-Exedev-Userid` header, leaving a stale socket file behind (connection

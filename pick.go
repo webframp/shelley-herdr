@@ -19,7 +19,7 @@ func (v vm) name() string { return strings.TrimSuffix(v.host, ".exe.xyz") }
 // looks like a local terminal running the agent; elsewhere this process becomes
 // the bridge.
 func pick() {
-	rl := newLineReader()
+	rl := newLineReader(true)
 	ask := func(q string, complete func(string) []string) string {
 		l, ok := rl.readLine(q, complete)
 		if !ok {

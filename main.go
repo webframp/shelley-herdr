@@ -43,6 +43,8 @@ type session struct {
 	reported                        bool
 	flags                           []string // client flags selecting the transport
 	probed                          bool
+	prompt                          string // the prompt of the turn in progress
+	turnSeq                         int    // sequence of that prompt's user message, once seen
 }
 
 func main() {
@@ -78,35 +80,26 @@ func main() {
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
-	go func() { <-sig; s.release(); os.Exit(130) }()
+	go func() { <-sig; restoreTTY(); s.release(); os.Exit(130) }()
 
 	if s.convID != "" {
 		// herdr only registers an agent on a non-idle first report.
 		s.report("working", "loading history")
-		s.render(false)
+		s.render(true)
 		s.report("idle", "resumed")
 		s.refreshTitle()
 	}
-	lines := make(chan string)
-	go func() {
-		sc := bufio.NewScanner(os.Stdin)
-		sc.Buffer(make([]byte, 1<<20), 1<<20)
-		for sc.Scan() {
-			lines <- sc.Text()
-		}
-		close(lines)
-	}()
 	if p := strings.Join(flag.Args()[1:], " "); p != "" {
 		s.turn(p)
 	}
+	rl := newLineReader(false)
 	for {
-		fmt.Printf("\x1b[1m%s ›\x1b[0m ", s.label)
-		line, ok := <-lines
+		line, ok := rl.readLine(fmt.Sprintf("\x1b[1m%s ›\x1b[0m ", s.label), nil)
 		if !ok {
 			s.release()
 			return
 		}
-		if line = strings.TrimSpace(line); line != "" {
+		if line != "" {
 			s.turn(line)
 		}
 	}
@@ -114,6 +107,7 @@ func main() {
 
 // turn sends a prompt and streams the agent's response until the turn ends.
 func (s *session) turn(prompt string) {
+	s.prompt, s.turnSeq = prompt, 0
 	s.report("working", "sending prompt")
 	args := []string{"chat", "-p", prompt}
 	if s.convID != "" {
@@ -143,39 +137,52 @@ func (s *session) turn(prompt string) {
 		s.registerSession()
 	}
 	s.report("working", "")
-	for failures := 0; ; {
-		err := s.render(true)
-		if err == nil {
-			if st, ok := s.status(); ok && st.Working {
-				time.Sleep(time.Second)
-				continue
+	// Poll rather than `read -wait`: that streams only until the first
+	// end-of-turn message in the history, so on a conversation that has finished
+	// a turn it returns before the new reply.
+	failures, quiet := 0, 0
+	for ; ; time.Sleep(time.Second) {
+		st, known := s.status() // before the read, so the read sees everything up to it
+		ended, err := s.render(false)
+		if err != nil {
+			if failures++; failures == 3 {
+				s.report("unknown", "connection to "+s.label+" lost; retrying")
 			}
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		if failures >= 3 {
+			s.report("working", "")
+		}
+		failures = 0
+		if ended {
 			break
 		}
-		if failures++; failures >= 3 {
-			s.report("unknown", "connection to "+s.label+" lost; retrying")
+		// The turn can also end without an end-of-turn message (an error).
+		if known && !st.Working {
+			if quiet++; quiet >= 3 {
+				break
+			}
+		} else {
+			quiet = 0
 		}
-		time.Sleep(3 * time.Second)
 	}
 	s.report("idle", "")
 	s.refreshTitle()
 }
 
-// render prints messages newer than lastSeq. With wait set it follows the
-// live turn; otherwise it replays history. User text is echoed only for replay.
-func (s *session) render(wait bool) error {
-	args := []string{"read"}
-	if wait {
-		args = append(args, "-wait")
-	}
-	cmd := s.shelley(append(args, s.convID)...)
+// render prints messages newer than lastSeq and reports whether one of them
+// ended a turn. With replay set it also echoes the user's own text, which a live
+// turn skips because the user just typed it.
+func (s *session) render(replay bool) (ended bool, err error) {
+	cmd := s.shelley("read", s.convID)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return err
+		return false, err
 	}
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
-		return err
+		return false, err
 	}
 	sc := bufio.NewScanner(stdout)
 	sc.Buffer(make([]byte, 1<<20), 16<<20)
@@ -185,8 +192,14 @@ func (s *session) render(wait bool) error {
 			continue
 		}
 		s.lastSeq = m.Seq
+		// Only an end after our own prompt ends our turn: the history can hold
+		// other turns, including ones another client sent to this conversation.
+		if m.Type == "user" && s.turnSeq == 0 && m.Text == s.prompt {
+			s.turnSeq = m.Seq
+		}
+		ended = ended || (m.EndOfTurn && s.turnSeq != 0 && m.Seq > s.turnSeq)
 		switch {
-		case m.Type == "user" && m.Text != "" && !wait:
+		case m.Type == "user" && m.Text != "" && replay:
 			fmt.Printf("\n\x1b[1m› %s\x1b[0m\n", m.Text)
 		case m.Type == "agent" && m.Text != "":
 			fmt.Printf("\n%s\n", m.Text)
@@ -194,7 +207,7 @@ func (s *session) render(wait bool) error {
 			fmt.Printf("\x1b[2m  ⚙ %s\x1b[0m\n", m.ToolName)
 		}
 	}
-	return cmd.Wait()
+	return ended, cmd.Wait()
 }
 
 func (s *session) status() (conversation, bool) {

@@ -65,6 +65,20 @@ check "agent name is shelley@<vm>"       test "$(agent_field "$p" agent)" = "she
 for i in 1 2 3 4 5 6 7 8; do [ "$(herdr agent get "$p" | grep -o '"title":"[^"]*"' | cut -d'"' -f4)" = "write-a-haiku" ] && break; sleep 0.5; done
 check "pane title is the conversation slug" test "$(herdr agent get "$p" | grep -o '"title":"[^"]*"' | cut -d'"' -f4)" = "write-a-haiku"
 
+# --- line editing and later turns ---------------------------------------------
+# Each of these is a second or later turn in a conversation that has already
+# finished one, which is where `read -wait` stops at the old end-of-turn.
+herdr pane send-text "$p" "tail" >/dev/null; herdr pane send-keys "$p" ctrl+a >/dev/null
+herdr pane send-text "$p" "head-" >/dev/null; herdr pane send-keys "$p" enter >/dev/null
+if wait_for "$p" 'ack: head-tail' 20; then ok "Ctrl-A moves to the start of the line, and a later turn is rendered"; else nok "Ctrl-A moves to the start of the line, and a later turn is rendered"; show_screen "$p"; fi
+herdr pane send-text "$p" "ab" >/dev/null; herdr pane send-keys "$p" left >/dev/null
+herdr pane send-text "$p" "X" >/dev/null; herdr pane send-keys "$p" enter >/dev/null
+if wait_for "$p" 'ack: aXb' 20; then ok "Left arrow edits in the middle of the line"; else nok "Left arrow edits in the middle of the line"; show_screen "$p"; fi
+herdr pane send-keys "$p" up >/dev/null
+for i in 1 2 3 4 5 6 7 8; do [ "$(screen "$p" | grep -c 'alpha-one › aXb')" -ge 2 ] && break; sleep 0.25; done
+check "Up arrow recalls the previous line" test "$(screen "$p" | grep -c 'alpha-one › aXb')" -ge 2
+herdr pane send-keys "$p" ctrl+u >/dev/null
+
 # --- resume command saved ----------------------------------------------------
 for i in $(seq 1 10); do [ -n "$(resume_argv)" ] && break; sleep 0.5; done
 argv=$(resume_argv)

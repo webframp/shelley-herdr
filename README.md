@@ -150,6 +150,9 @@ Shelley never pauses for tool approval, so the bridge never reports `blocked`.
 - It exposes tool names but not their arguments or output, so tool calls
   appear as one dim line (`⚙ bash`).
 - A prompt typed during a running turn waits until the turn ends.
+- Line editing covers cursor keys, Home/End, Ctrl-A/E/B/F/K/U/W, Alt-b/f and
+  history (Up/Down) within one session. History is not saved between sessions, and
+  a line longer than the pane width does not redraw cleanly.
 - Resume after a herdr restart works only if herdr can run the saved command.
   herdr rejects paths and apostrophes in it, which is why it goes through `sh`.
 
