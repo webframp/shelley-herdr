@@ -13,7 +13,7 @@ Go standard library.
 
 ## Requirements
 
-- herdr 0.9 or newer, running locally.
+- herdr 0.9.3 or newer, running locally. The picker is a popup, which is verified on 0.9.3.
 - An exe.dev account, with your SSH key registered. These must work without a
   password prompt:
   ```sh

@@ -1,7 +1,8 @@
 id = "webframp.shelley"
 name = "Shelley"
-version = "0.2.2"
-min_herdr_version = "0.9.0"
+version = "0.2.3"
+min_herdr_version = "0.9.3"
+description = "Run Shelley conversations on remote exe.dev VMs as native herdr agents, each in its own workspace with live state and restart resume."
 platforms = ["linux", "macos"]
 
 # Runs on `herdr plugin install` only; `plugin link` never builds.
