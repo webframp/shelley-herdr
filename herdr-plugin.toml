@@ -12,12 +12,12 @@ command = ["go", "build", "-o", "shelly-herdr", "."]
 id = "open"
 title = "Shelley: open on an exe.dev VM"
 contexts = ["workspace"]
-command = ["herdr", "plugin", "pane", "open", "--plugin", "webframp.shelly", "--entrypoint", "picker", "--placement", "split", "--direction", "right", "--focus"]
+command = ["herdr", "plugin", "pane", "open", "--plugin", "webframp.shelly", "--entrypoint", "picker", "--focus"]
 
 [[panes]]
 id = "picker"
 title = "Shelley"
-placement = "split"
+placement = "popup"
 # Prefer shelly-herdr on PATH (Nix and other package installs); fall back to the
 # binary built into the plugin directory by the install step.
 command = ["sh", "-c", '''command -v shelly-herdr >/dev/null 2>&1 && exec shelly-herdr pick || exec ./shelly-herdr pick''']

@@ -13,7 +13,7 @@ Go, standard library only. Do not add dependencies.
 | Path | Purpose |
 | --- | --- |
 | `main.go` | The bridge: one pane, one conversation. Sends prompts, streams replies, reports state. |
-| `pick.go` | `shelly-herdr pick`: lists VMs from `ssh exe.dev ls`, then recent conversations, then `exec`s the bridge so the pane becomes the agent. |
+| `pick.go` | `shelly-herdr pick`: lists VMs from `ssh exe.dev ls`, then recent conversations, then creates a herdr workspace and runs the bridge in its shell pane (outside herdr it `exec`s the bridge). `readline.go` adds Tab completion through `stty`. |
 | `herdr-plugin.toml` | herdr plugin manifest: one action (`open`), one pane (`picker`), one build step. |
 | `flake.nix` | Package (`packages.default`, includes the plugin dir), `homeManagerModules.default`, overlay, dev shell. |
 | `test/` | Container tests for both install methods. See Testing. |
@@ -50,6 +50,13 @@ code, because herdr fails silently or rejects with terse errors.
 - **Binary path in the resume command:** prefer the `PATH` entry when it is the
   same file as the running binary (`os.SameFile`). A Nix store path goes stale
   after an upgrade; `~/.nix-profile/bin/shelly-herdr` does not.
+- **Plugin panes are not agent terminals.** The picker is a `popup` plugin pane. A popup
+  is not a pane: it has no pane ID and no pane or agent APIs, so a headless test
+  can only confirm the action succeeded, and `test/lib.sh` runs the picker command
+  in a plain pane instead. The 0.9.3 CLI does not list `popup` or `--width/--height`
+  for `plugin pane open`, but the 0.9.3 server accepts it from the manifest. The bridge runs in a plain workspace root pane started with
+  `herdr workspace create` and `herdr pane run`, so herdr treats it as a local
+  terminal.
 - **Plugin commands:** they run with the plugin directory as the working
   directory. The server's `PATH` is what it started with, and often lacks
   `~/.local/bin`. The picker pane therefore runs `shelly-herdr` from `PATH` and

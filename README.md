@@ -91,9 +91,11 @@ From any herdr workspace, invoke the plugin action, or [bind it to a key](#keybi
 herdr plugin action invoke open --plugin webframp.shelly
 ```
 
-A split pane opens with your running VMs, discovered from `ssh exe.dev ls`.
-Pick one by number or name, then pick a recent conversation or start a new one.
-The pane becomes the agent.
+A popup opens with your running VMs, discovered from `ssh exe.dev ls`.
+Pick one by number or name (Tab completes names), then pick a recent
+conversation or start a new one. The popup closes and a workspace named
+`shelley@<vm>` opens, with the conversation running in an ordinary terminal pane.
+herdr lists it in the sidebar like any local agent.
 
 Or skip the picker and run the bridge directly in any herdr pane:
 

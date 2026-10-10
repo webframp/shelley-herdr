@@ -284,12 +284,18 @@ func (s *session) release() {
 func (s *session) resumeArgv() []string {
 	// herdr rejects a path as argv[0] and its server PATH may not include our
 	// install dir, so hand it a plain `sh` that execs the absolute path.
+	// herdr also bans apostrophes, so pass arguments positionally, unquoted.
+	return []string{"sh", "-c", `exec "$0" "$@"`, binPath(), "-c", s.convID, s.label}
+}
+
+// binPath is the path to run this program again. It prefers the PATH entry when
+// that is the same file as the running binary: the PATH entry survives upgrades,
+// whereas the resolved path (e.g. a Nix store path) goes stale.
+func binPath() string {
 	exe, err := os.Executable()
 	if err != nil {
 		exe = os.Args[0]
 	}
-	// Prefer the PATH entry for this binary: it survives upgrades, whereas the
-	// resolved path (e.g. a Nix store path) goes stale.
 	if p, err := exec.LookPath("shelly-herdr"); err == nil {
 		if a, e1 := os.Stat(p); e1 == nil {
 			if b, e2 := os.Stat(exe); e2 == nil && os.SameFile(a, b) {
@@ -297,6 +303,5 @@ func (s *session) resumeArgv() []string {
 			}
 		}
 	}
-	// herdr also bans apostrophes, so pass arguments positionally, unquoted.
-	return []string{"sh", "-c", `exec "$0" "$@"`, exe, "-c", s.convID, s.label}
+	return exe
 }
