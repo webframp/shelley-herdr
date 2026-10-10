@@ -79,6 +79,15 @@ for i in 1 2 3 4 5 6 7 8; do [ "$(screen "$p" | grep -c 'alpha-one › aXb')" -g
 check "Up arrow recalls the previous line" test "$(screen "$p" | grep -c 'alpha-one › aXb')" -ge 2
 herdr pane send-keys "$p" ctrl+u >/dev/null
 
+# --- replies that arrive while the bridge is idle at the prompt --------------
+# Another client adds a turn to the conversation. The bridge must print it above
+# the half-typed line, without a keypress, and keep that line intact.
+herdr pane send-text "$p" "par" >/dev/null
+shelley client chat -c cFAKE001 -p "from elsewhere" >/dev/null 2>&1
+if wait_for "$p" 'ack: from elsewhere' 20; then ok "a reply that arrives while idle is printed without a keypress"; else nok "a reply that arrives while idle is printed without a keypress"; show_screen "$p"; fi
+check "the half-typed line survives the background output" bash -c "$(declare -f screen); screen $p | grep -q 'alpha-one › par'"
+herdr pane send-keys "$p" ctrl+u >/dev/null
+
 # --- resume command saved ----------------------------------------------------
 for i in $(seq 1 10); do [ -n "$(resume_argv)" ] && break; sleep 0.5; done
 argv=$(resume_argv)
@@ -109,10 +118,16 @@ if wait_for "$p2" 'ack: over tcp' 20; then ok "bridge falls back to localhost:99
 rm -f "$FAKE_STATE/unix_down"
 
 # --- dropped connection mid-turn ---------------------------------------------
-echo 14000 >"$FAKE_STATE/turn_ms"; echo 3 >"$FAKE_STATE/fail_reads"
+# Close the resumed bridge: its idle watcher would use up the dropped reads, which
+# the fake counts per conversation rather than per client.
+herdr pane close "$p2" >/dev/null 2>&1
+echo 14000 >"$FAKE_STATE/turn_ms"
 : >/tmp/states2
 watch_status "$p" /tmp/states2 & watcher=$!
 say "$p" "slow one"
+# Drop the connection once the turn is running: while idle, the background
+# watcher would use up the failures.
+sleep 1; echo 3 >"$FAKE_STATE/fail_reads"
 if wait_for "$p" 'ack: slow one' 45; then ok "bridge recovers after a dropped connection"; else nok "bridge recovers after a dropped connection"; show_screen "$p"; fi
 sleep 1
 kill "$watcher" 2>/dev/null; wait "$watcher" 2>/dev/null

@@ -28,6 +28,11 @@ Go, standard library only. Do not add dependencies.
   has already finished a turn it returns before the new reply. A turn ends at an
   `end_of_turn` message after the bridge's own prompt, since other clients can
   add turns to the same conversation.
+- While no turn is running, `watch` polls every 2 seconds and prints new messages
+  above the prompt (`lineReader.printAbove` clears the line and redraws it with
+  its text and cursor), and reports `working` or `idle` from the VM's working flag.
+  This covers replies that arrive after a turn was judged over, and turns added by
+  another client. `session.mu` serialises it with `turn`.
 - Input uses `readline.go`: raw mode through `stty`, cursor keys, Ctrl-A/E/B/F/K/U/W,
   Alt-b/f, history, and Tab completion in the picker. `restoreTTY` runs from the
   signal handler so a killed bridge never leaves the terminal without echo.
@@ -119,7 +124,9 @@ Gotchas when editing the tests:
   profile, or Home Manager conflicts with the image's own packages.
 - Fake `shelley` mirrors the real client's output as observed, not as specified.
   `test/fakes/shelley` reads `turn_ms` and `fail_reads` files in `$FAKE_STATE` so a
-  test can change turn length or simulate a dropped connection mid-run.
+  test can change turn length or simulate a dropped connection mid-run. The dropped
+  reads are counted per conversation, not per client, so any other idle bridge on
+  the same conversation uses them up: close it first.
 - The suite proves little unless it can fail. When changing it, mutate the product
   (for example, make the resume command an absolute path) and confirm a test
   fails, then restore the file.

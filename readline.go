@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"sort"
 	"strings"
+	"sync"
 )
 
 // lineReader reads one line at a time with the usual editing keys, history and
@@ -17,6 +18,12 @@ type lineReader struct {
 	in         *bufio.Reader
 	history    []string
 	escCancels bool // a lone Esc cancels the line (the picker); otherwise it is ignored
+
+	// mu guards the terminal while a line is being edited, so output from another
+	// goroutine (printAbove) and the editor never interleave. redraw is non-nil
+	// only while a line is active.
+	mu     sync.Mutex
+	redraw func()
 }
 
 func newLineReader(escCancels bool) *lineReader {
@@ -90,11 +97,17 @@ func (r *lineReader) readLine(prompt string, complete func(string) []string) (li
 		}
 	}
 
-	for {
-		c, _, err := r.in.ReadRune()
-		if err != nil {
-			return "", false
-		}
+	r.mu.Lock()
+	r.redraw = redraw
+	r.mu.Unlock()
+	defer func() {
+		r.mu.Lock()
+		r.redraw = nil
+		r.mu.Unlock()
+	}()
+
+	// step handles one key under the lock. done reports that the line is finished.
+	step := func(c rune) (line string, done, ok bool) {
 		switch {
 		case c == '\r' || c == '\n':
 			fmt.Print("\r\n")
@@ -102,10 +115,10 @@ func (r *lineReader) readLine(prompt string, complete func(string) []string) (li
 			if line != "" && (len(r.history) == 0 || r.history[len(r.history)-1] != line) {
 				r.history = append(r.history, line)
 			}
-			return line, true
+			return line, true, true
 		case c == 3 || (c == 4 && len(buf) == 0): // Ctrl-C, Ctrl-D on empty
 			fmt.Print("\r\n")
-			return "", false
+			return "", true, false
 		case c == 4 && pos < len(buf): // Ctrl-D deletes forward
 			del(pos, pos+1)
 		case c == 1: // Ctrl-A
@@ -138,9 +151,9 @@ func (r *lineReader) readLine(prompt string, complete func(string) []string) (li
 			if r.in.Buffered() == 0 {
 				if r.escCancels {
 					fmt.Print("\r\n")
-					return "", false
+					return "", true, false
 				}
-				continue
+				return
 			}
 			seq := r.escapeSeq()
 			switch seq {
@@ -174,7 +187,7 @@ func (r *lineReader) readLine(prompt string, complete func(string) []string) (li
 		case c == '\t' && complete != nil:
 			cands := complete(string(buf))
 			if len(cands) == 0 {
-				continue
+				return
 			}
 			if p := commonPrefix(cands); len(p) > len(buf) {
 				buf = []rune(p)
@@ -197,6 +210,35 @@ func (r *lineReader) readLine(prompt string, complete func(string) []string) (li
 				redraw()
 			}
 		}
+		return
+	}
+
+	for {
+		c, _, err := r.in.ReadRune()
+		if err != nil {
+			return "", false
+		}
+		r.mu.Lock()
+		line, done, ok := step(c)
+		r.mu.Unlock()
+		if done {
+			return line, ok
+		}
+	}
+}
+
+// printAbove runs f, which prints whole lines, without disturbing a line being
+// edited: it clears the prompt line first and redraws it, with its text and
+// cursor, afterwards.
+func (r *lineReader) printAbove(f func()) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.redraw != nil {
+		fmt.Print("\r\x1b[K")
+	}
+	f()
+	if r.redraw != nil {
+		r.redraw()
 	}
 }
 

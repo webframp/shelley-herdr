@@ -16,6 +16,7 @@ import (
 	"os/signal"
 	"slices"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 )
@@ -45,6 +46,11 @@ type session struct {
 	probed                          bool
 	prompt                          string // the prompt of the turn in progress
 	turnSeq                         int    // sequence of that prompt's user message, once seen
+	state                           string // last state reported to herdr
+
+	// mu is held for a whole turn and for each background poll, so only one of
+	// them reads the conversation and advances lastSeq at a time.
+	mu sync.Mutex
 }
 
 func main() {
@@ -85,7 +91,9 @@ func main() {
 	if s.convID != "" {
 		// herdr only registers an agent on a non-idle first report.
 		s.report("working", "loading history")
-		s.render(true)
+		if out, _, _ := s.render(true); out != "" {
+			fmt.Print(out)
+		}
 		s.report("idle", "resumed")
 		s.refreshTitle()
 	}
@@ -93,6 +101,7 @@ func main() {
 		s.turn(p)
 	}
 	rl := newLineReader(false)
+	go s.watch(rl)
 	for {
 		line, ok := rl.readLine(fmt.Sprintf("\x1b[1m%s ›\x1b[0m ", s.label), nil)
 		if !ok {
@@ -107,6 +116,8 @@ func main() {
 
 // turn sends a prompt and streams the agent's response until the turn ends.
 func (s *session) turn(prompt string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.prompt, s.turnSeq = prompt, 0
 	s.report("working", "sending prompt")
 	args := []string{"chat", "-p", prompt}
@@ -143,7 +154,8 @@ func (s *session) turn(prompt string) {
 	failures, quiet := 0, 0
 	for ; ; time.Sleep(time.Second) {
 		st, known := s.status() // before the read, so the read sees everything up to it
-		ended, err := s.render(false)
+		out, ended, err := s.render(false)
+		fmt.Print(out)
 		if err != nil {
 			if failures++; failures == 3 {
 				s.report("unknown", "connection to "+s.label+" lost; retrying")
@@ -171,19 +183,21 @@ func (s *session) turn(prompt string) {
 	s.refreshTitle()
 }
 
-// render prints messages newer than lastSeq and reports whether one of them
-// ended a turn. With replay set it also echoes the user's own text, which a live
-// turn skips because the user just typed it.
-func (s *session) render(replay bool) (ended bool, err error) {
+// render returns the text of messages newer than lastSeq and reports whether
+// one of them ended a turn. With replay set it also includes the user's own
+// text, which a live turn skips because the user just typed it. The text is
+// returned rather than printed so the caller can print it above a prompt.
+func (s *session) render(replay bool) (out string, ended bool, err error) {
 	cmd := s.shelley("read", s.convID)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return false, err
+		return "", false, err
 	}
 	cmd.Stderr = os.Stderr
 	if err := cmd.Start(); err != nil {
-		return false, err
+		return "", false, err
 	}
+	var b strings.Builder
 	sc := bufio.NewScanner(stdout)
 	sc.Buffer(make([]byte, 1<<20), 16<<20)
 	for sc.Scan() {
@@ -200,14 +214,52 @@ func (s *session) render(replay bool) (ended bool, err error) {
 		ended = ended || (m.EndOfTurn && s.turnSeq != 0 && m.Seq > s.turnSeq)
 		switch {
 		case m.Type == "user" && m.Text != "" && replay:
-			fmt.Printf("\n\x1b[1m› %s\x1b[0m\n", m.Text)
+			fmt.Fprintf(&b, "\n\x1b[1m› %s\x1b[0m\n", m.Text)
 		case m.Type == "agent" && m.Text != "":
-			fmt.Printf("\n%s\n", m.Text)
+			fmt.Fprintf(&b, "\n%s\n", m.Text)
 		case m.Type == "agent" && m.ToolName != "":
-			fmt.Printf("\x1b[2m  ⚙ %s\x1b[0m\n", m.ToolName)
+			fmt.Fprintf(&b, "\x1b[2m  ⚙ %s\x1b[0m\n", m.ToolName)
 		}
 	}
-	return ended, cmd.Wait()
+	return b.String(), ended, cmd.Wait()
+}
+
+// watch keeps reading the conversation while no turn is running, so a reply that
+// arrives after the bridge considered the turn over (or one that another client
+// or a background task adds) shows up above the prompt instead of waiting for
+// the next keypress. It also tracks the VM's working flag, so herdr shows the
+// agent as working or idle for activity that did not start here.
+func (s *session) watch(rl *lineReader) {
+	for range time.Tick(2 * time.Second) {
+		if s.convID == "" || !s.mu.TryLock() {
+			continue
+		}
+		s.poll(rl)
+		s.mu.Unlock()
+	}
+}
+
+func (s *session) poll(rl *lineReader) {
+	st, known := s.status()
+	out, _, err := s.render(true)
+	if err != nil {
+		return
+	}
+	if out != "" {
+		rl.printAbove(func() { fmt.Print(out) })
+	}
+	if !known {
+		return
+	}
+	switch {
+	case st.Working && s.state != "working":
+		s.report("working", "")
+	case !st.Working && s.state == "working":
+		s.report("idle", "")
+		s.refreshTitle()
+	case !st.Working && out != "" && s.state != "idle":
+		s.report("idle", "")
+	}
 }
 
 func (s *session) status() (conversation, bool) {
@@ -297,6 +349,7 @@ func (s *session) herdrRun(args ...string) {
 // report publishes the semantic state. Once the conversation ID is known the
 // resume command rides along so herdr can restart the bridge after a restart.
 func (s *session) report(state, msg string) {
+	s.state = state
 	a := []string{"report-agent", s.pane, "--source", source, "--agent", "shelley@" + s.label,
 		"--state", state, "--seq", fmt.Sprint(time.Now().UnixMilli())}
 	if msg != "" {
