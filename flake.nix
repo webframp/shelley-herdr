@@ -19,6 +19,9 @@
         version = "0.1.0";
         src = self;
         vendorHash = null; # stdlib only
+        # Only the bridge: test/fakes also contain main packages, and building
+        # them would install fake ssh and shelley binaries over the real ones.
+        subPackages = ["."];
 
         postInstall = ''
           # herdr plugin manifest; its pane runs `shelly-herdr` from PATH.

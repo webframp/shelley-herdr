@@ -27,6 +27,7 @@ github)
   ;;
 nix)
   check "registered from a Nix store path" bash -c 'herdr plugin list | grep -q "local:/nix/store/"'
+  check "package installs only shelly-herdr (no fake ssh/shelley)" test "$(ls "$(dirname "$(readlink -f "$(command -v shelly-herdr)")")")" = shelly-herdr
   check "binary is on PATH from the Home Manager profile" bash -c 'command -v shelly-herdr | grep -q "^$HOME/.nix-profile/bin/"'
   ;;
 esac

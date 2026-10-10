@@ -117,6 +117,38 @@ Not covered: the real Shelley, keybindings (they need an attached client), and
 platforms other than Linux x86_64. Home Manager and `nixos/nix:latest` are not
 pinned, so upstream changes can break the nix run on their own.
 
+## Shipping boundary
+
+Test code must never reach a user's machine, and the packaging must prove it.
+
+The general problem: build and packaging tools select by pattern, not by intent.
+`buildGoModule` builds every `main` package, `go build ./...` and `go install
+./...` do the same, and a `cp -r` or glob in an install step takes whatever matches.
+Anything that shares the pattern with product code ships with it. A test double
+is the worst case, because it is built to impersonate something real. A fake named
+`ssh` installed into a profile's `bin/` shadows the real `ssh` for every program
+the user runs, not just this one. The test suite cannot catch this by itself: it
+runs with the fakes first on `PATH`, so a leaked fake looks like a working install.
+v0.1.0 shipped fake `ssh` and `shelley` binaries this way.
+
+Rules:
+
+- **Name the product explicitly.** Build only what ships: `subPackages = ["."]` in
+  `flake.nix`, `go build -o shelly-herdr .` in the manifest. Never rely on a
+  default or a wildcard to select the product, and never use `./...` for anything
+  that installs.
+- **Never give a fake the name of a real tool on a user's `PATH`.** Keep fakes out
+  of any package that gets installed, and build them only inside the test
+  containers (`test/run.sh`).
+- **Check what the artifact contains, not what the source contains.** For each
+  install method, list the installed files and assert that they are exactly the
+  expected set (see the "installs only shelly-herdr" check in `test/suite.sh`). A
+  new file in the artifact should fail a test until someone decides it belongs.
+- **Prove the check can fail.** Revert the fix, confirm the new check fails, then
+  restore it.
+- **Before a release, look at the built output.** `nix build` and `ls result/bin`,
+  or the plugin directory after `herdr plugin install`, and read the file list.
+
 ## Conventions
 
 - Match the existing comment density: short comments that explain why, not what.
