@@ -1,4 +1,4 @@
-// shelly-herdr runs a conversation with Shelley on a remote exe.dev VM inside
+// shelley-herdr runs a conversation with Shelley on a remote exe.dev VM inside
 // a herdr pane and reports its state to herdr like a native agent.
 //
 // Transport is `ssh <vm> shelley client ...`; herdr is driven through the
@@ -41,6 +41,8 @@ type session struct {
 	lastSeq                         int
 	herdr, pane                     string
 	reported                        bool
+	flags                           []string // client flags selecting the transport
+	probed                          bool
 }
 
 func main() {
@@ -52,7 +54,7 @@ func main() {
 	cwd := flag.String("cwd", "", "working directory on the VM for a new conversation")
 	model := flag.String("model", "", "Shelley model for a new conversation")
 	flag.Usage = func() {
-		fmt.Fprintln(os.Stderr, "usage: shelly-herdr [-c ID] [-cwd DIR] [-model M] <vm> [prompt...]")
+		fmt.Fprintln(os.Stderr, "usage: shelley-herdr [-c ID] [-cwd DIR] [-model M] <vm> [prompt...]")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -210,13 +212,42 @@ func (s *session) status() (conversation, bool) {
 }
 
 func (s *session) shelley(args ...string) *exec.Cmd {
+	s.detectTransport()
+	return s.run(append(append([]string{}, s.flags...), args...)...)
+}
+
+func (s *session) run(args ...string) *exec.Cmd {
 	remote := "shelley client"
 	for _, a := range args {
 		remote += " " + shQuote(a)
 	}
 	return exec.Command("ssh", "-o", "BatchMode=yes", "-o", "ControlMaster=auto",
-		"-o", "ControlPath=~/.ssh/cm-shelly-%C", "-o", "ControlPersist=10m",
+		"-o", "ControlPath=~/.ssh/cm-shelley-%C", "-o", "ControlPersist=10m",
 		"-o", "ServerAliveInterval=15", s.host, remote)
+}
+
+// tcpFlags reach a Shelley that systemd socket-activates on localhost:9999 and
+// that requires a user header, as exe.dev VMs do. Any value satisfies the header.
+var tcpFlags = []string{"-url", "http://localhost:9999", "-H", "X-Exedev-Userid: shelley-herdr"}
+
+// detectTransport picks how `shelley client` reaches the server on this VM,
+// once per session. It uses the client's default (a unix socket) when that
+// works, then the localhost TCP endpoint. A VM can have a stale unix socket
+// file with nothing listening, so the default cannot be assumed.
+func (s *session) detectTransport() {
+	if s.probed {
+		return
+	}
+	s.probed = true
+	probe := func(flags []string) bool {
+		return s.run(append(append([]string{}, flags...), "list", "-limit", "1")...).Run() == nil
+	}
+	if probe(nil) {
+		return
+	}
+	if probe(tcpFlags) {
+		s.flags = tcpFlags
+	}
 }
 
 func shQuote(a string) string { return "'" + strings.ReplaceAll(a, "'", `'\''`) + "'" }
@@ -296,7 +327,7 @@ func binPath() string {
 	if err != nil {
 		exe = os.Args[0]
 	}
-	if p, err := exec.LookPath("shelly-herdr"); err == nil {
+	if p, err := exec.LookPath("shelley-herdr"); err == nil {
 		if a, e1 := os.Stat(p); e1 == nil {
 			if b, e2 := os.Stat(exe); e2 == nil && os.SameFile(a, b) {
 				exe = p

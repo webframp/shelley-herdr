@@ -130,7 +130,30 @@ func main() {
 	if len(args) == 0 || args[0] != "client" || len(args) < 2 {
 		fail("usage: shelley client <chat|read|list> ...")
 	}
-	sub, rest := args[1], args[2:]
+	// Global flags precede the subcommand, as in the real client.
+	args = args[1:]
+	url, hdr := "", ""
+	for len(args) >= 2 && (args[0] == "-url" || args[0] == "-H") {
+		if args[0] == "-url" {
+			url = args[1]
+		} else {
+			hdr = args[1]
+		}
+		args = args[2:]
+	}
+	if len(args) == 0 {
+		fail("usage: shelley client <chat|read|list> ...")
+	}
+	// A VM whose unix socket is stale: only the TCP endpoint, with its header, works.
+	if _, err := os.Stat(filepath.Join(stateDir(), "unix_down")); err == nil {
+		switch {
+		case url == "":
+			fail("Error: Post \"http://localhost/api/conversations/new\": dial unix /home/exedev/.config/shelley/shelley.sock: connect: connection refused")
+		case !strings.Contains(hdr, "X-Exedev-Userid:"):
+			fail("Error: HTTP 403")
+		}
+	}
+	sub, rest := args[0], args[1:]
 	switch sub {
 	case "chat":
 		chat(rest)

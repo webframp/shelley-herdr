@@ -97,7 +97,7 @@ func pick() {
 		}
 	}
 	exe := binPath()
-	if err := syscall.Exec(exe, append([]string{"shelly-herdr"}, args...), os.Environ()); err != nil {
+	if err := syscall.Exec(exe, append([]string{"shelley-herdr"}, args...), os.Environ()); err != nil {
 		fmt.Fprintln(os.Stderr, "exec:", err)
 		os.Exit(1)
 	}

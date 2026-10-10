@@ -1,23 +1,23 @@
-id = "webframp.shelly"
-name = "Shelly"
-version = "0.1.1"
+id = "webframp.shelley"
+name = "Shelley"
+version = "0.2.0"
 min_herdr_version = "0.9.0"
 platforms = ["linux", "macos"]
 
 # Runs on `herdr plugin install` only; `plugin link` never builds.
 [[build]]
-command = ["go", "build", "-o", "shelly-herdr", "."]
+command = ["go", "build", "-o", "shelley-herdr", "."]
 
 [[actions]]
 id = "open"
 title = "Shelley: open on an exe.dev VM"
 contexts = ["workspace"]
-command = ["herdr", "plugin", "pane", "open", "--plugin", "webframp.shelly", "--entrypoint", "picker", "--focus"]
+command = ["herdr", "plugin", "pane", "open", "--plugin", "webframp.shelley", "--entrypoint", "picker", "--focus"]
 
 [[panes]]
 id = "picker"
 title = "Shelley"
 placement = "popup"
-# Prefer shelly-herdr on PATH (Nix and other package installs); fall back to the
+# Prefer shelley-herdr on PATH (Nix and other package installs); fall back to the
 # binary built into the plugin directory by the install step.
-command = ["sh", "-c", '''command -v shelly-herdr >/dev/null 2>&1 && exec shelly-herdr pick || exec ./shelly-herdr pick''']
+command = ["sh", "-c", '''command -v shelley-herdr >/dev/null 2>&1 && exec shelley-herdr pick || exec ./shelley-herdr pick''']

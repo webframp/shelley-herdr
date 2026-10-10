@@ -1,4 +1,4 @@
-# shelly-herdr
+# shelley-herdr
 
 Runs [Shelley](https://exe.dev) conversations on remote exe.dev VMs as native
 [herdr](https://herdr.dev) agents. Shelley is a web agent with no terminal UI, so
@@ -13,7 +13,7 @@ Go, standard library only. Do not add dependencies.
 | Path | Purpose |
 | --- | --- |
 | `main.go` | The bridge: one pane, one conversation. Sends prompts, streams replies, reports state. |
-| `pick.go` | `shelly-herdr pick`: lists VMs from `ssh exe.dev ls`, then recent conversations, then creates a herdr workspace and runs the bridge in its shell pane (outside herdr it `exec`s the bridge). `readline.go` adds Tab completion through `stty`. |
+| `pick.go` | `shelley-herdr pick`: lists VMs from `ssh exe.dev ls`, then recent conversations, then creates a herdr workspace and runs the bridge in its shell pane (outside herdr it `exec`s the bridge). `readline.go` adds Tab completion through `stty`. |
 | `herdr-plugin.toml` | herdr plugin manifest: one action (`open`), one pane (`picker`), one build step. |
 | `flake.nix` | Package (`packages.default`, includes the plugin dir), `homeManagerModules.default`, overlay, dev shell. |
 | `test/` | Container tests for both install methods. See Testing. |
@@ -23,6 +23,11 @@ Go, standard library only. Do not add dependencies.
 
 - Transport: `ssh <vm>.exe.xyz shelley client {chat,read,list}`. `read -wait`
   replays history, then streams. The bridge dedupes by `sequence_id`.
+- The client's default endpoint is a unix socket, but a VM can run Shelley
+  socket-activated by systemd on `127.0.0.1:9999` with a required
+  `X-Exedev-Userid` header, leaving a stale socket file behind (connection
+  refused). `detectTransport` probes once per session: the default first, then
+  `-url http://localhost:9999 -H "X-Exedev-Userid: …"`. Do not assume one transport.
 - State goes to herdr by shelling out to `herdr pane report-agent`,
   `report-metadata` and `release-agent` (no socket code). Source is
   `custom:shelley`; agent label is `shelley@<vm>`.
@@ -49,7 +54,7 @@ code, because herdr fails silently or rejects with terse errors.
   reports `working` while it replays history, then `idle`.
 - **Binary path in the resume command:** prefer the `PATH` entry when it is the
   same file as the running binary (`os.SameFile`). A Nix store path goes stale
-  after an upgrade; `~/.nix-profile/bin/shelly-herdr` does not.
+  after an upgrade; `~/.nix-profile/bin/shelley-herdr` does not.
 - **Plugin panes are not agent terminals.** The picker is a `popup` plugin pane. A popup
   is not a pane: it has no pane ID and no pane or agent APIs, so a headless test
   can only confirm the action succeeded, and `test/lib.sh` runs the picker command
@@ -59,14 +64,14 @@ code, because herdr fails silently or rejects with terse errors.
   terminal.
 - **Plugin commands:** they run with the plugin directory as the working
   directory. The server's `PATH` is what it started with, and often lacks
-  `~/.local/bin`. The picker pane therefore runs `shelly-herdr` from `PATH` and
-  falls back to `./shelly-herdr` (the binary the install built).
+  `~/.local/bin`. The picker pane therefore runs `shelley-herdr` from `PATH` and
+  falls back to `./shelley-herdr` (the binary the install built).
 - **Plugin install vs link:** `herdr plugin install owner/repo` clones with git,
   runs `[[build]]` after confirmation, and registers a managed checkout.
   `herdr plugin link <dir>` never builds. Both work with no server running.
   herdr refuses to install over a linked plugin.
 - **Keybindings** are not declarable in the manifest. Users bind
-  `type = "plugin_action"`, `command = "webframp.shelly.open"` in `config.toml`.
+  `type = "plugin_action"`, `command = "webframp.shelley.open"` in `config.toml`.
 - **Plugin registry is global and shared:** `~/.config/herdr/plugins.json`.
   Overriding `HOME`, `XDG_CONFIG_HOME`, `HERDR_CONFIG_PATH` or `HERDR_SOCKET_PATH`
   does not isolate it. Never run `herdr plugin link/install/uninstall` against the
@@ -75,12 +80,12 @@ code, because herdr fails silently or rejects with terse errors.
 
 ## Install paths
 
-Two methods that end in the same registered plugin (`webframp.shelly`):
+Two methods that end in the same registered plugin (`webframp.shelley`):
 
-1. **Home Manager:** `programs.shelly-herdr.enable = true`. The module installs the
+1. **Home Manager:** `programs.shelley-herdr.enable = true`. The module installs the
    package and runs `herdr plugin link <store path>` on every switch (after
    `installPackages`). Failure or a missing `herdr` warns but never fails the switch.
-2. **Everything else:** `herdr plugin install webframp/shelly-herdr`, which builds
+2. **Everything else:** `herdr plugin install webframp/shelley-herdr`, which builds
    the binary into the plugin directory.
 
 The module does not manage a keybinding.
@@ -134,7 +139,7 @@ v0.1.0 shipped fake `ssh` and `shelley` binaries this way.
 Rules:
 
 - **Name the product explicitly.** Build only what ships: `subPackages = ["."]` in
-  `flake.nix`, `go build -o shelly-herdr .` in the manifest. Never rely on a
+  `flake.nix`, `go build -o shelley-herdr .` in the manifest. Never rely on a
   default or a wildcard to select the product, and never use `./...` for anything
   that installs.
 - **Never give a fake the name of a real tool on a user's `PATH`.** Keep fakes out
@@ -142,7 +147,7 @@ Rules:
   containers (`test/run.sh`).
 - **Check what the artifact contains, not what the source contains.** For each
   install method, list the installed files and assert that they are exactly the
-  expected set (see the "installs only shelly-herdr" check in `test/suite.sh`). A
+  expected set (see the "installs only shelley-herdr" check in `test/suite.sh`). A
   new file in the artifact should fail a test until someone decides it belongs.
 - **Prove the check can fail.** Revert the fix, confirm the new check fails, then
   restore it.

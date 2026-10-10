@@ -18,17 +18,17 @@ herdr workspace create >/dev/null
 root=$(plugin_root)
 
 # --- registration and binary resolution --------------------------------------
-check "plugin is registered" bash -c 'herdr plugin list | grep -q webframp.shelly'
+check "plugin is registered" bash -c 'herdr plugin list | grep -q webframp.shelley'
 case "$FLAVOR" in
 github)
-  check "registered from GitHub source" bash -c 'herdr plugin list | grep -q "github:webframp/shelly-herdr@"'
-  check "install built the binary into the plugin directory" test -x "$root/shelly-herdr"
-  check "binary is not on PATH (fallback path is what runs)" bash -c '! command -v shelly-herdr'
+  check "registered from GitHub source" bash -c 'herdr plugin list | grep -q "github:webframp/shelley-herdr@"'
+  check "install built the binary into the plugin directory" test -x "$root/shelley-herdr"
+  check "binary is not on PATH (fallback path is what runs)" bash -c '! command -v shelley-herdr'
   ;;
 nix)
   check "registered from a Nix store path" bash -c 'herdr plugin list | grep -q "local:/nix/store/"'
-  check "package installs only shelly-herdr (no fake ssh/shelley)" test "$(ls "$(dirname "$(readlink -f "$(command -v shelly-herdr)")")")" = shelly-herdr
-  check "binary is on PATH from the Home Manager profile" bash -c 'command -v shelly-herdr | grep -q "^$HOME/.nix-profile/bin/"'
+  check "package installs only shelley-herdr (no fake ssh/shelley)" test "$(ls "$(dirname "$(readlink -f "$(command -v shelley-herdr)")")")" = shelley-herdr
+  check "binary is on PATH from the Home Manager profile" bash -c 'command -v shelley-herdr | grep -q "^$HOME/.nix-profile/bin/"'
   ;;
 esac
 
@@ -72,11 +72,13 @@ echo "# saved resume: $argv"
 check "resume command is saved with the conversation id" bash -c "echo '$argv' | grep -q '\"-c\",\"cFAKE001\",\"alpha-one\"'"
 check "resume command starts with plain sh"              bash -c "echo '$argv' | grep -q '\"argv\":\[\"sh\",\"-c\"'"
 case "$FLAVOR" in
-github) check "resume command uses the installed plugin binary" bash -c "echo '$argv' | grep -qE '/plugins/github/webframp\.shelly-[0-9a-f]+/shelly-herdr'" ;;
-nix)    check "resume command uses the stable profile path, not a store path" bash -c "echo '$argv' | grep -q '$HOME/.nix-profile/bin/shelly-herdr' && ! echo '$argv' | grep -q '/nix/store/'" ;;
+github) check "resume command uses the installed plugin binary" bash -c "echo '$argv' | grep -qE '/plugins/github/webframp\.shelley-[0-9a-f]+/shelley-herdr'" ;;
+nix)    check "resume command uses the stable profile path, not a store path" bash -c "echo '$argv' | grep -q '$HOME/.nix-profile/bin/shelley-herdr' && ! echo '$argv' | grep -q '/nix/store/'" ;;
 esac
 
 # --- resume through the picker ----------------------------------------------
+# From here the VM's unix socket is stale: only localhost:9999 with a header works.
+touch "$FAKE_STATE/unix_down"
 before=$(panes)
 p2=$(open_picker)
 wait_for "$p2" 'Shelley on which VM' 10
@@ -88,6 +90,9 @@ p2=$(new_pane "$before")
 if wait_for "$p2" 'ack: write a haiku' 10; then ok "history replays on resume"; else nok "history replays on resume"; show_screen "$p2"; fi
 sleep 1
 check "resumed pane is registered as an agent" test "$(agent_field "$p2" agent)" = "shelley@alpha-one"
+say "$p2" "over tcp"
+if wait_for "$p2" 'ack: over tcp' 20; then ok "bridge falls back to localhost:9999 when the unix socket is stale"; else nok "bridge falls back to localhost:9999 when the unix socket is stale"; show_screen "$p2"; fi
+rm -f "$FAKE_STATE/unix_down"
 
 # --- dropped connection mid-turn ---------------------------------------------
 echo 14000 >"$FAKE_STATE/turn_ms"; echo 3 >"$FAKE_STATE/fail_reads"
@@ -107,7 +112,7 @@ stop_server
 start_server || exit 1
 relaunched=
 for i in $(seq 1 60); do
-  proc_running '(^|/)shelly-herdr -c cFAKE001 alpha-one' && { relaunched=1; break; }
+  proc_running '(^|/)shelley-herdr -c cFAKE001 alpha-one' && { relaunched=1; break; }
   sleep 0.5
 done
 if [ -n "$relaunched" ]; then ok "bridge is relaunched after a server restart"; else nok "bridge is relaunched after a server restart"; fi
@@ -120,18 +125,18 @@ if [ -n "$restored" ]; then ok "restored pane is registered as shelley@alpha-one
 
 # --- re-running setup is idempotent ------------------------------------------
 /repo/test/setup-$FLAVOR.sh reinstall >/tmp/reinstall.log 2>&1 || { echo "# reinstall output:"; sed 's/^/#   /' /tmp/reinstall.log | tail -20; }
-check "plugin is still registered exactly once after re-running setup" test "$(herdr plugin list | grep -c '^- webframp.shelly ')" = 1
+check "plugin is still registered exactly once after re-running setup" test "$(herdr plugin list | grep -c '^- webframp.shelley ')" = 1
 if [ "$FLAVOR" = github ]; then
   newroot=$(plugin_root)
-  check "binary still exists after reinstall" test -x "$newroot/shelly-herdr"
+  check "binary still exists after reinstall" test -x "$newroot/shelley-herdr"
 fi
 
 # --- launcher: PATH wins, plugin-directory binary is the fallback (github) ---
 if [ "$FLAVOR" = github ]; then
   cmd=$(sed -n "s/^command = \[\"sh\", \"-c\", '''\(.*\)'''\]\$/\1/p" "$(plugin_root)/herdr-plugin.toml")
-  stub=$(mktemp -d); printf '#!/bin/sh\necho PATH-BINARY-WON\n' >"$stub/shelly-herdr"; chmod +x "$stub/shelly-herdr"
+  stub=$(mktemp -d); printf '#!/bin/sh\necho PATH-BINARY-WON\n' >"$stub/shelley-herdr"; chmod +x "$stub/shelley-herdr"
   check "launcher command was extracted from the manifest" test -n "$cmd"
-  check "launcher prefers shelly-herdr on PATH" bash -c "cd '$(plugin_root)' && PATH='$stub':\$PATH sh -c '$cmd' </dev/null 2>&1 | grep -q PATH-BINARY-WON"
+  check "launcher prefers shelley-herdr on PATH" bash -c "cd '$(plugin_root)' && PATH='$stub':\$PATH sh -c '$cmd' </dev/null 2>&1 | grep -q PATH-BINARY-WON"
   check "launcher falls back to the built binary" bash -c "cd '$(plugin_root)' && sh -c '$cmd' </dev/null 2>&1 | grep -q 'Shelley on which VM'"
 fi
 

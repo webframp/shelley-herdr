@@ -15,7 +15,7 @@ HERDR_VERSION=${HERDR_VERSION:-v0.9.3}
 HERDR_SHA256=${HERDR_SHA256:-18a8dc65f1c2fa485884344356dea1cfd911c6f06cf46fa78e193f4087f4dba7}   # linux-x86_64 for v0.9.3
 GO_IMAGE=${GO_IMAGE:-docker.io/library/golang:1.22-bookworm}   # also proves Go 1.22 builds it
 NIX_IMAGE=${NIX_IMAGE:-docker.io/nixos/nix:latest}
-NIX_VOLUME=shelly-herdr-test-nix
+NIX_VOLUME=shelley-herdr-test-nix
 
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(dirname "$here")
@@ -25,7 +25,7 @@ want=${1:-all}
 if [ "$want" = clean ]; then $rt volume rm -f "$NIX_VOLUME" >/dev/null; echo "removed $NIX_VOLUME"; exit 0; fi
 case "$want" in all|github|nix) ;; *) echo "usage: $0 [all|github|nix|clean]" >&2; exit 2 ;; esac
 
-cache=${XDG_CACHE_HOME:-$HOME/.cache}/shelly-herdr-test
+cache=${XDG_CACHE_HOME:-$HOME/.cache}/shelley-herdr-test
 mkdir -p "$cache"
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT

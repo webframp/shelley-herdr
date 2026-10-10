@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Home Manager install: builds a throwaway Home Manager configuration that
-# enables programs.shelly-herdr from the snapshot of this working tree, then runs
+# enables programs.shelley-herdr from the snapshot of this working tree, then runs
 # its real activation script, exactly as `home-manager switch` would.
 set -eu
 export NIX_CONFIG='experimental-features = nix-command flakes
@@ -12,18 +12,18 @@ git config --global --add safe.directory '*'
 mkdir -p /tmp/hm
 cat >/tmp/hm/flake.nix <<'NIX'
 {
-  inputs.shelly-herdr.url = "git+file:///tmp/repo";
-  inputs.nixpkgs.follows = "shelly-herdr/nixpkgs";
+  inputs.shelley-herdr.url = "git+file:///tmp/repo";
+  inputs.nixpkgs.follows = "shelley-herdr/nixpkgs";
   inputs.home-manager.url = "github:nix-community/home-manager";
   inputs.home-manager.inputs.nixpkgs.follows = "nixpkgs";
-  outputs = {nixpkgs, home-manager, shelly-herdr, ...}: {
+  outputs = {nixpkgs, home-manager, shelley-herdr, ...}: {
     homeConfigurations.tester = home-manager.lib.homeManagerConfiguration {
       pkgs = nixpkgs.legacyPackages.x86_64-linux;
       modules = [
-        shelly-herdr.homeManagerModules.default
+        shelley-herdr.homeManagerModules.default
         {
           home = {username = "tester"; homeDirectory = "/home/tester"; stateVersion = "24.11";};
-          programs.shelly-herdr.enable = true;
+          programs.shelley-herdr.enable = true;
           # On a real machine herdr is in the same profile (the module looks for
           # it there); the test mounts the release binary, so expose it the same way.
           home.packages = [(nixpkgs.legacyPackages.x86_64-linux.writeShellScriptBin "herdr" ''exec /usr/local/bin/herdr "$@"'')];

@@ -1,6 +1,6 @@
 # Core targets: build, clean, test.
 
-BINARY := shelly-herdr
+BINARY := shelley-herdr
 # Which install method `make test` exercises: all, github (herdr plugin install)
 # or nix (Home Manager).
 FLAVOR ?= all

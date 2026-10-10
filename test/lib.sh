@@ -31,7 +31,7 @@ panes() { herdr pane list | grep -o '"pane_id":"[^"]*"' | cut -d'"' -f4 | sort; 
 # succeeded; the picker's own behavior is tested in a plain pane (open_picker).
 popup_action() {
   local i
-  herdr plugin action invoke open --plugin webframp.shelly >/dev/null 2>&1 || return 1
+  herdr plugin action invoke open --plugin webframp.shelley >/dev/null 2>&1 || return 1
   for i in $(seq 1 20); do
     herdr plugin log 2>&1 | grep -q '"action_id":"open".*"status":"succeeded"' && return 0
     sleep 0.25
