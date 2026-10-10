@@ -1,6 +1,6 @@
 id = "webframp.shelley"
 name = "Shelley"
-version = "0.2.1"
+version = "0.2.2"
 min_herdr_version = "0.9.0"
 platforms = ["linux", "macos"]
 

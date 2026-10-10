@@ -16,7 +16,7 @@
     packages = forEachSystem (pkgs: {
       default = pkgs.buildGoModule {
         pname = "shelley-herdr";
-        version = "0.2.1";
+        version = "0.2.2";
         src = self;
         vendorHash = null; # stdlib only
         # Only the bridge: test/fakes also contain main packages, and building
