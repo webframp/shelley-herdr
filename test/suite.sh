@@ -32,14 +32,22 @@ nix)
 esac
 
 # --- picker ------------------------------------------------------------------
-p=$(open_picker) || { nok "picker pane opened"; summary; exit 1; }
+check "plugin action opens the picker popup" popup_action
+before=$(panes)
+p=$(open_picker) || { nok "picker pane opened"; herdr plugin log 2>&1 | tail -c 1500 | sed "s/^/#   /"; summary; exit 1; }
 if wait_for "$p" 'Shelley on which VM' 10; then ok "picker pane opened"; else nok "picker pane opened"; show_screen "$p"; summary; exit 1; fi
 check "picker lists running VMs"        bash -c "$(declare -f screen); screen $p | grep -q alpha-one"
 check "picker hides stopped VMs"        bash -c "$(declare -f screen); ! screen $p | grep -q gamma-three"
 
 # --- new conversation: state transitions, title, output ----------------------
-say "$p" alpha-one
+# Tab completion: a unique prefix completes to the full name.
+herdr pane send-text "$p" "alph" >/dev/null; herdr pane send-keys "$p" tab >/dev/null
+if wait_for "$p" ': alpha-one' 5; then ok "Tab completes a VM name"; else nok "Tab completes a VM name"; show_screen "$p"; fi
+herdr pane send-keys "$p" enter >/dev/null
+# The picker overlay closes and the conversation opens in its own workspace.
+p=$(new_pane "$before") || { nok "bridge opened in a new workspace"; summary; exit 1; }
 if wait_for "$p" 'alpha-one ›' 10; then ok "bridge started after choosing a VM"; else nok "bridge started after choosing a VM"; show_screen "$p"; summary; exit 1; fi
+check "conversation has its own workspace labeled shelley@alpha-one" bash -c 'herdr workspace list | grep -q "\"label\":\"shelley@alpha-one\""'
 
 : >/tmp/states
 watch_status "$p" /tmp/states & watcher=$!
@@ -68,12 +76,14 @@ nix)    check "resume command uses the stable profile path, not a store path" ba
 esac
 
 # --- resume through the picker ----------------------------------------------
+before=$(panes)
 p2=$(open_picker)
 wait_for "$p2" 'Shelley on which VM' 10
 say "$p2" alpha-one
 if wait_for "$p2" 'Conversations on alpha-one' 10; then ok "picker offers existing conversations"; else nok "picker offers existing conversations"; show_screen "$p2"; fi
 check "conversation slug is listed" bash -c "$(declare -f screen); screen $p2 | grep -q write-a-haiku"
 say "$p2" 1
+p2=$(new_pane "$before")
 if wait_for "$p2" 'ack: write a haiku' 10; then ok "history replays on resume"; else nok "history replays on resume"; show_screen "$p2"; fi
 sleep 1
 check "resumed pane is registered as an agent" test "$(agent_field "$p2" agent)" = "shelley@alpha-one"

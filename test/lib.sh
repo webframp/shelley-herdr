@@ -26,14 +26,47 @@ stop_server() { herdr server stop >/dev/null 2>&1; sleep 2; }
 
 panes() { herdr pane list | grep -o '"pane_id":"[^"]*"' | cut -d'"' -f4 | sort; }
 
-# open_picker: invoke the plugin action and print the id of the new pane.
+# popup_action: invoke the plugin action. The picker is a popup, which is not a
+# pane and has no pane APIs, so a headless server can only confirm the action
+# succeeded; the picker's own behavior is tested in a plain pane (open_picker).
+popup_action() {
+  local i
+  herdr plugin action invoke open --plugin webframp.shelly >/dev/null 2>&1 || return 1
+  for i in $(seq 1 20); do
+    herdr plugin log 2>&1 | grep -q '"action_id":"open".*"status":"succeeded"' && return 0
+    sleep 0.25
+  done
+  return 1
+}
+
+# open_picker: run the manifest's picker command in a new plain pane and print
+# the pane id. HERDR_ENV and the pane id are set by herdr, as in a popup.
 open_picker() {
-  local before new i
+  local before new i cmd q
+  cmd=$(grep '^command = \["sh"' "$(plugin_root)/herdr-plugin.toml")
+  q="'''"
+  cmd=${cmd#*"$q"}; cmd=${cmd%"$q"*}
   before=$(panes)
-  herdr plugin action invoke open --plugin webframp.shelly >/dev/null 2>&1
+  herdr pane split --direction right >/dev/null 2>&1
   for i in $(seq 1 40); do
-    new=$(comm -13 <(echo "$before") <(panes))
-    [ -n "$new" ] && { echo "$new" | head -1; return 0; }
+    new=$(comm -13 <(echo "$before") <(panes) | head -1)
+    [ -n "$new" ] && break
+    sleep 0.25
+  done
+  [ -n "$new" ] || return 1
+  herdr pane run "$new" "cd '$(plugin_root)' && sh -c '$cmd'" >/dev/null 2>&1
+  echo "$new"
+}
+
+# new_pane BEFORE: print the id of a pane that was not in the BEFORE list, once
+# one appears and is not the (closing) picker.
+new_pane() {
+  local i new
+  for i in $(seq 1 40); do
+    new=$(comm -13 <(echo "$1" | sort) <(panes) | while read -r q; do
+      screen "$q" | grep -qE 'Shelley on which VM|pane_not_found' || echo "$q"
+    done | head -1)
+    [ -n "$new" ] && { echo "$new"; return 0; }
     sleep 0.25
   done
   return 1
@@ -59,7 +92,16 @@ watch_status() {
   while :; do agent_field "$1" agent_status >>"$2"; sleep 0.15; done
 }
 
-plugin_root() { grep -o '"plugin_root": *"[^"]*"' ~/.config/herdr/plugins.json | head -1 | cut -d'"' -f4; }
+plugin_root() {
+  local r
+  r=$(grep -o '"plugin_root": *"[^"]*"' ~/.config/herdr/plugins.json | head -1 | cut -d'"' -f4)
+  # A linked plugin (Home Manager) has no managed checkout; use the link target.
+  if [ -z "$r" ]; then
+    r=$(herdr plugin list | grep -o '\[local:[^]]*\]' | head -1)
+    r=${r#\[local:}; r=${r%\]}
+  fi
+  echo "$r"
+}
 
 # resume_argv: the saved resume command of any shelley agent, as one line.
 resume_argv() {
